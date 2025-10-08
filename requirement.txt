@@ -1,0 +1,283 @@
+this is completely new react ts project created using vite please do the following things in it 
+Designing : 
+User tailwind css install it 
+Navigation : install routing and navigation plugin
+API service : install axios
+Timing : install moment
+Theming : Light and Dark theme
+
+Requirement:
+Pages (Login , Setup, Dashboard)
+
+Login : 
+Login page should have username and password field and call this api 
+
+curl -X 'POST' \
+  'http://localhost:8000/api/authenticate' \
+  -H 'accept: application/json' \
+  -H 'Content-Type: application/json' \
+  -d '{
+  "username": "admin",
+  "password": "admin"
+}'
+
+sample response : 
+
+{
+  "success": true,
+  "message": "Authentication successful",
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImFkbWluIiwidGltZXN0YW1wIjoxNzU5ODkwMzE3LjAwNzAxNCwiZXhwIjoxNzU5ODkyMTE3fQ.6dRCEuxzuwOiUbPU9QAidz_SzjZB-ik80UEAjlq1cII",
+  "user": {
+    "username": "admin"
+  }
+}
+
+
+After login we need to check if the configuration is available or not
+
+curl -X 'GET' \
+  'http://localhost:8000/api/check-email-config' \
+  -H 'accept: application/json' \
+  -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImFkbWluIiwidGltZXN0YW1wIjoxNzU5ODkwMzE3LjAwNzAxNCwiZXhwIjoxNzU5ODkyMTE3fQ.6dRCEuxzuwOiUbPU9QAidz_SzjZB-ik80UEAjlq1cII'
+
+sample Response : 
+{
+  "exists": true
+}
+
+if configuration is available then take the user to the dashboard and if not available means "false" then take the user to setup page
+
+Setup Page : 
+It should have 2 sections 
+section 1 (Database Config)
+--Server : 
+--Port : 
+--DB user :
+--DB user password:
+--Database
+
+Section 2 (Email Config)
+-- Start Time : (Time selection field)
+-- End Time : (Time selection field)
+-- Interval : (Number)
+-- Interval Unit : (hours, minutes)
+-- DB Request timeout : (default 30000)
+-- DB Connection timeout : (default 30000)
+
+
+after the section we need to provide 2 buttons 
+1. Test Connection
+2. Save Config
+
+Test connection is mandatory to check first after then user can click save config if connection is successfult 
+
+API for test connection 
+
+curl -X 'POST' \
+  'http://localhost:8000/api/test-connection' \
+  -H 'accept: application/json' \
+  -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImFkbWluIiwidGltZXN0YW1wIjoxNzU5ODkwMzE3LjAwNzAxNCwiZXhwIjoxNzU5ODkyMTE3fQ.6dRCEuxzuwOiUbPU9QAidz_SzjZB-ik80UEAjlq1cII' \
+  -H 'Content-Type: application/json' \
+  -d '{
+  "server": "string",
+  "port": 0,
+  "user": "string",
+  "password": "string",
+  "database": "string"
+}'
+
+response sample failed case 
+{
+  "success": false,
+  "message": "Connection failed: (pyodbc.OperationalError) ('08001', '[08001] [Microsoft][ODBC Driver 17 for SQL Server]Named Pipes Provider: Could not open a connection to SQL Server [53].  (53) (SQLDriverConnect); [08001] [Microsoft][ODBC Driver 17 for SQL Server]Login timeout expired (0); [08001] [Microsoft][ODBC Driver 17 for SQL Server]Invalid connection string attribute (0); [08001] [Microsoft][ODBC Driver 17 for SQL Server]A network-related or instance-specific error has occurred while establishing a connection to SQL Server. Server is not found or not accessible. Check if instance name is correct and if SQL Server is configured to allow remote connections. For more information see SQL Server Books Online. (53)')\n(Background on this error at: https://sqlalche.me/e/20/e3q8)",
+  "response_time": 62104,
+  "timestamp": "2025-10-08T08:06:15.181565"
+}
+
+
+After the success connection test please enable save button and call this api on click
+API 1 : Email config
+curl -X 'POST' \
+  'http://localhost:8000/api/save-email-config' \
+  -H 'accept: application/json' \
+  -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImFkbWluIiwidGltZXN0YW1wIjoxNzU5ODkwMzE3LjAwNzAxNCwiZXhwIjoxNzU5ODkyMTE3fQ.6dRCEuxzuwOiUbPU9QAidz_SzjZB-ik80UEAjlq1cII' \
+  -H 'Content-Type: application/json' \
+  -d '{
+  "start_time": "0600",
+  "end_time": "2200",
+  "interval": 5,
+  "interval_unit": "minutes",
+  "db_request_timeout": 30000,
+  "db_connection_timeout": 30000,
+  "username": "admin",
+  "password": "admin"
+}'
+
+sample resposne : 
+
+{
+  "success": true,
+  "message": "Email service configuration saved successfully"
+}
+
+API 2 : Database config
+
+http://localhost:8000/api/save-config
+
+payload : {
+  "server": "string",
+  "port": 0,
+  "user": "string",
+  "password": "string",
+  "database": "string"
+}
+
+After save all this we need to goto the next page Dashboard
+
+Dashboard Page : 
+
+First call this api 
+
+curl -X 'GET' \
+  'http://localhost:8000/api/get-current-config' \
+  -H 'accept: application/json' \
+  -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImFkbWluIiwidGltZXN0YW1wIjoxNzU5ODkwMzE3LjAwNzAxNCwiZXhwIjoxNzU5ODkyMTE3fQ.6dRCEuxzuwOiUbPU9QAidz_SzjZB-ik80UEAjlq1cII'
+
+sample response from this api : 
+
+{
+  "success": true,
+  "config": {
+    "database": {
+      "exists": true,
+      "config": {
+        "server": "61.12.61.163",
+        "port": 3324,
+        "user": "secmark",
+        "password": "***",
+        "database": "TPLUSUAT"
+      }
+    },
+    "email": {
+      "exists": true,
+      "config": {
+        "start_time": "04:00",
+        "end_time": "23:55",
+        "interval": 2,
+        "interval_unit": "minutes",
+        "db_request_timeout": 30000,
+        "db_connection_timeout": 30000,
+        "username": "admin",
+        "password": "***"
+      }
+    }
+  }
+}
+
+On the dashboard page we need to provide the Edit config button somewhere and use the avobe api to show data in that 
+
+use this api to get dashboard data please 
+
+curl -X 'GET' \
+  'http://localhost:8000/api/dashboard' \
+  -H 'accept: application/json' \
+  -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImFkbWluIiwidGltZXN0YW1wIjoxNzU5ODkwMzE3LjAwNzAxNCwiZXhwIjoxNzU5ODkyMTE3fQ.6dRCEuxzuwOiUbPU9QAidz_SzjZB-ik80UEAjlq1cII'
+
+sample resposne : 
+
+{
+  "database": {
+    "connected": false,
+    "server": "61.12.61.163",
+    "database": "TPLUSUAT",
+    "last_checked": "2025-10-08T08:18:48.828321",
+    "response_time": 60409,
+    "message": "Connection failed: (pyodbc.OperationalError) ('08001', '[08001] [Microsoft][ODBC Driver 17 for SQL Server]TCP Provider: The wait operation timed out.\\r\\n (258) (SQLDriverConnect); [08001] [Microsoft][ODBC Driver 17 for SQL Server]Login timeout expired (0); [08001] [Microsoft][ODBC Driver 17 for SQL Server]Invalid connection string attribute (0); [08001] [Microsoft][ODBC Driver 17 for SQL Server]A network-related or instance-specific error has occurred while establishing a connection to SQL Server. Server is not found or not accessible. Check if instance name is correct and if SQL Server is configured to allow remote connections. For more information see SQL Server Books Online. (258)')\n(Background on this error at: https://sqlalche.me/e/20/e3q8)"
+  },
+  "schedule": {
+    "start_time": "04:00",
+    "end_time": "23:55",
+    "interval": 2,
+    "interval_unit": "minutes",
+    "is_active": true,
+    "within_schedule": true,
+    "next_run": null
+  },
+  "service": {
+    "status": "running",
+    "started_at": "2025-10-08T07:42:10.864351",
+    "last_activity": "2025-10-08T08:16:10.867224",
+    "next_run": "2025-10-08T08:18:10.864351+05:30",
+    "is_processing": false,
+    "email_stats": {
+      "total_processed": 0,
+      "total_sent": 0,
+      "total_failed": 0,
+      "pending_count": 0
+    }
+  }
+}
+
+we need to provide 2 buttons start and stop also on the dashboard please if the status is running then disable the start button otherwise disable the dtop button so that user can start and stop the email server
+
+curl -X 'POST' \
+  'http://localhost:8000/api/service-control' \
+  -H 'accept: application/json' \
+  -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImFkbWluIiwidGltZXN0YW1wIjoxNzU5ODkwMzE3LjAwNzAxNCwiZXhwIjoxNzU5ODkyMTE3fQ.6dRCEuxzuwOiUbPU9QAidz_SzjZB-ik80UEAjlq1cII' \
+  -H 'Content-Type: application/json' \
+  -d '{
+  "action": "start",
+  "user": "admin"
+}'
+
+ Use 'start' or 'stop' in action
+
+ sample response :
+
+ {
+  "success": true,
+  "message": "Email service started successfully",
+  "status": {
+    "service_status": "running",
+    "started_at": "2025-10-08T08:23:11.293402",
+    "started_by": "admin",
+    "schedule": {
+      "start_time": "0600",
+      "end_time": "2200",
+      "interval": 5,
+      "interval_unit": "minutes",
+      "next_run": "2025-10-08T08:28:11.294404+05:30"
+    }
+  }
+}
+
+
+
+Also please use the api for show the status of the USB certificates  
+
+curl -X 'GET' \
+  'http://localhost:8000/api/certificate-status' \
+  -H 'accept: application/json' \
+  -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImFkbWluIiwidGltZXN0YW1wIjoxNzU5ODkwMzE3LjAwNzAxNCwiZXhwIjoxNzU5ODkyMTE3fQ.6dRCEuxzuwOiUbPU9QAidz_SzjZB-ik80UEAjlq1cII'
+
+sample response in case of no certificate avaialble :
+
+{
+  "success": false,
+  "available": false,
+  "token_present": false,
+  "certificate_found": false,
+  "token_label": null,
+  "slot_id": null,
+  "certificate_id": null,
+  "certificate_subject": null,
+  "certificate_not_valid_before": null,
+  "certificate_not_valid_after": null,
+  "library_path": "C:\\Windows\\System32\\eTPKCS11.dll",
+  "error": "Load (C:\\Windows\\System32\\eTPKCS11.dll)"
+}
+
+
+
+
+
