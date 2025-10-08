@@ -36,6 +36,12 @@ class ApiService {
     return response.data;
   }
 
+  // Verify token
+  async verifyToken() {
+    const response = await this.api.get('/authenticate');
+    return response.data;
+  }
+
   // Check email config
   async checkEmailConfig() {
     const response = await this.api.get('/check-email-config');
