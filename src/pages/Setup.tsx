@@ -91,7 +91,7 @@ const Setup = () => {
         db_request_timeout: dbRequestTimeout,
         db_connection_timeout: dbConnectionTimeout,
         username: user?.username || 'admin',
-        password: dbPassword,
+        password: "admin",
       });
 
       setMessage({ type: 'success', text: 'Configuration saved successfully!' });
@@ -131,11 +131,10 @@ const Setup = () => {
       <div className="max-w-4xl mx-auto p-6">
         {message && (
           <div
-            className={`mb-4 p-4 rounded-lg ${
-              message.type === 'success'
+            className={`mb-4 p-4 rounded-lg ${message.type === 'success'
                 ? 'bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-200'
                 : 'bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-200'
-            }`}
+              }`}
           >
             {message.text}
           </div>
