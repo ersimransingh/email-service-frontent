@@ -148,6 +148,7 @@ const Dashboard = () => {
   const [selectedCertificate, setSelectedCertificate] = useState<Certificate | null>(null);
   const [pinInput, setPinInput] = useState('');
   const [pinLoading, setPinLoading] = useState(false);
+  const [pinModalError, setPinModalError] = useState<string | null>(null);
 
   const fetchData = async () => {
     try {
@@ -234,16 +235,18 @@ const Dashboard = () => {
   const handleOpenPinModal = (cert: Certificate) => {
     setSelectedCertificate(cert);
     setPinInput('');
+    setPinModalError(null);
     setShowPinModal(true);
   };
 
   const handleSavePin = async () => {
     if (!selectedCertificate || !pinInput) {
-      setMessage({ type: 'error', text: 'Please enter a PIN' });
+      setPinModalError('Please enter a PIN');
       return;
     }
 
     setPinLoading(true);
+    setPinModalError(null);
     setMessage(null);
 
     try {
@@ -258,23 +261,48 @@ const Dashboard = () => {
 
       const response = await apiService.storeCertificatePin(entries);
 
-      if (response.success) {
+      // Check if response is an array (error case) or object (success case)
+      if (Array.isArray(response)) {
+        // Handle array response with individual certificate results
+        const result = response[0];
+        if (result && !result.success) {
+          // PIN validation failed - show error in modal
+          const errorMsg = result.error || result.message || 'Failed to save PIN';
+          setPinModalError(errorMsg);
+          // Keep modal open so user can try again
+        } else if (result && result.success) {
+          // Success
+          setMessage({ type: 'success', text: 'PIN saved successfully' });
+          setShowPinModal(false);
+          setPinInput('');
+          setSelectedCertificate(null);
+          setPinModalError(null);
+
+          // Refresh PIN status
+          const pinStatus = await apiService.getCertificatePinStatus(true);
+          setCertificatePinStatus(pinStatus);
+        }
+      } else if (response.success) {
+        // Standard success response
         setMessage({ type: 'success', text: 'PIN saved successfully' });
         setShowPinModal(false);
         setPinInput('');
         setSelectedCertificate(null);
+        setPinModalError(null);
 
         // Refresh PIN status
         const pinStatus = await apiService.getCertificatePinStatus(true);
         setCertificatePinStatus(pinStatus);
       } else {
-        setMessage({ type: 'error', text: response.message || 'Failed to save PIN' });
+        // Standard error response
+        const errorMsg = response.message || 'Failed to save PIN';
+        setPinModalError(errorMsg);
       }
     } catch (error: any) {
-      setMessage({
-        type: 'error',
-        text: error.response?.data?.message || 'Failed to save PIN',
-      });
+      const errorMsg = error.response?.data?.message ||
+                       error.response?.data?.error ||
+                       'Failed to save PIN';
+      setPinModalError(errorMsg);
     } finally {
       setPinLoading(false);
     }
@@ -782,6 +810,7 @@ const Dashboard = () => {
                     setShowPinModal(false);
                     setPinInput('');
                     setSelectedCertificate(null);
+                    setPinModalError(null);
                   }}
                   className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
                 >
@@ -808,6 +837,12 @@ const Dashboard = () => {
                   placeholder="Enter certificate PIN"
                   autoFocus
                 />
+
+                {pinModalError && (
+                  <div className="mt-3 p-3 bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-200 rounded text-sm">
+                    {pinModalError}
+                  </div>
+                )}
               </div>
 
               <div className="flex gap-4">
@@ -823,6 +858,7 @@ const Dashboard = () => {
                     setShowPinModal(false);
                     setPinInput('');
                     setSelectedCertificate(null);
+                    setPinModalError(null);
                   }}
                   className="flex-1 bg-gray-500 hover:bg-gray-600 text-white font-semibold py-2 px-4 rounded-lg transition-colors"
                 >
