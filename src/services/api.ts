@@ -110,6 +110,33 @@ class ApiService {
     const response = await this.api.get('/certificate-status');
     return response.data;
   }
+
+  // Get all certificates
+  async getCertificates() {
+    const response = await this.api.get('/certificates');
+    return response.data;
+  }
+
+  // Get certificate PIN status
+  async getCertificatePinStatus(refresh: boolean = false) {
+    const response = await this.api.get('/certificates/pins/status', {
+      params: { refresh }
+    });
+    return response.data;
+  }
+
+  // Store/Update certificate PIN
+  async storeCertificatePin(entries: Array<{
+    token_label: string;
+    certificate_id: string;
+    slot_id: number;
+    pin: string;
+    certificate_subject: string;
+    certificate_serial: string;
+  }>) {
+    const response = await this.api.post('/certificates/pins', { entries });
+    return response.data;
+  }
 }
 
 export default new ApiService();

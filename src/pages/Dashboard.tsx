@@ -82,6 +82,52 @@ interface ConfigData {
   };
 }
 
+interface Certificate {
+  subject: string;
+  issuer: string;
+  serial_number: string;
+  not_valid_before: string;
+  not_valid_after: string;
+  thumbprint: string;
+  has_private_key: boolean;
+  store_name: string | null;
+  store_location: string | null;
+  source: string;
+  token_label: string | null;
+  slot_id: number | null;
+}
+
+interface CertificatesResponse {
+  success: boolean;
+  total_certificates: number;
+  system_certificates: Certificate[];
+  hardware_certificates: Certificate[];
+  error: string | null;
+}
+
+interface CertificatePinStatus {
+  token_present: boolean;
+  token_label: string;
+  slot_id: number;
+  certificate_id: string;
+  subject: string;
+  issuer: string;
+  serial_number: string;
+  not_valid_before: string;
+  not_valid_after: string;
+  pin_configured: boolean;
+  pin_valid: boolean;
+  pin_last_verified_at: string | null;
+  pin_last_error: string | null;
+}
+
+interface CertificatePinStatusResponse {
+  success: boolean;
+  total_certificates: number;
+  certificates: CertificatePinStatus[];
+  error: string | null;
+}
+
 const Dashboard = () => {
   const navigate = useNavigate();
   const { theme, toggleTheme } = useTheme();
@@ -95,15 +141,27 @@ const Dashboard = () => {
   const [showConfigModal, setShowConfigModal] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
+  // Certificate management states
+  const [certificates, setCertificates] = useState<CertificatesResponse | null>(null);
+  const [certificatePinStatus, setCertificatePinStatus] = useState<CertificatePinStatusResponse | null>(null);
+  const [showPinModal, setShowPinModal] = useState(false);
+  const [selectedCertificate, setSelectedCertificate] = useState<Certificate | null>(null);
+  const [pinInput, setPinInput] = useState('');
+  const [pinLoading, setPinLoading] = useState(false);
+
   const fetchData = async () => {
     try {
-      const [dashboard, certificate] = await Promise.all([
+      const [dashboard, certificate, certs, pinStatus] = await Promise.all([
         apiService.getDashboard(),
         apiService.getCertificateStatus(),
+        apiService.getCertificates(),
+        apiService.getCertificatePinStatus(false),
       ]);
 
       setDashboardData(dashboard);
       setCertificateStatus(certificate);
+      setCertificates(certs);
+      setCertificatePinStatus(pinStatus);
     } catch (error: any) {
       console.error('Error fetching dashboard data:', error);
       setMessage({
@@ -155,6 +213,80 @@ const Dashboard = () => {
   const handleEditConfig = async () => {
     await fetchConfig();
     setShowConfigModal(true);
+  };
+
+  const handleRefreshPinStatus = async () => {
+    setPinLoading(true);
+    try {
+      const pinStatus = await apiService.getCertificatePinStatus(true);
+      setCertificatePinStatus(pinStatus);
+      setMessage({ type: 'success', text: 'PIN status refreshed successfully' });
+    } catch (error: any) {
+      setMessage({
+        type: 'error',
+        text: error.response?.data?.message || 'Failed to refresh PIN status',
+      });
+    } finally {
+      setPinLoading(false);
+    }
+  };
+
+  const handleOpenPinModal = (cert: Certificate) => {
+    setSelectedCertificate(cert);
+    setPinInput('');
+    setShowPinModal(true);
+  };
+
+  const handleSavePin = async () => {
+    if (!selectedCertificate || !pinInput) {
+      setMessage({ type: 'error', text: 'Please enter a PIN' });
+      return;
+    }
+
+    setPinLoading(true);
+    setMessage(null);
+
+    try {
+      const entries = [{
+        token_label: selectedCertificate.token_label || '',
+        certificate_id: selectedCertificate.thumbprint,
+        slot_id: selectedCertificate.slot_id || 0,
+        pin: pinInput,
+        certificate_subject: selectedCertificate.subject,
+        certificate_serial: selectedCertificate.serial_number,
+      }];
+
+      const response = await apiService.storeCertificatePin(entries);
+
+      if (response.success) {
+        setMessage({ type: 'success', text: 'PIN saved successfully' });
+        setShowPinModal(false);
+        setPinInput('');
+        setSelectedCertificate(null);
+
+        // Refresh PIN status
+        const pinStatus = await apiService.getCertificatePinStatus(true);
+        setCertificatePinStatus(pinStatus);
+      } else {
+        setMessage({ type: 'error', text: response.message || 'Failed to save PIN' });
+      }
+    } catch (error: any) {
+      setMessage({
+        type: 'error',
+        text: error.response?.data?.message || 'Failed to save PIN',
+      });
+    } finally {
+      setPinLoading(false);
+    }
+  };
+
+  const getPinStatusForCertificate = (thumbprint: string) => {
+    if (!certificatePinStatus || !certificatePinStatus.certificates) {
+      return null;
+    }
+    return certificatePinStatus.certificates.find(
+      (cert) => cert.certificate_id === thumbprint
+    );
   };
 
   if (loading) {
@@ -445,7 +577,262 @@ const Dashboard = () => {
             </div>
           )}
         </div>
+
+        {/* Linked Certificates Section */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mt-6">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+              Linked Certificates
+            </h2>
+            <button
+              onClick={handleRefreshPinStatus}
+              disabled={pinLoading}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-lg transition-colors"
+            >
+              {pinLoading ? 'Refreshing...' : 'Refresh PIN Status'}
+            </button>
+          </div>
+
+          {certificates?.error && (
+            <div className="mb-4 p-3 bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-200 rounded text-sm">
+              {certificates.error}
+            </div>
+          )}
+
+          <div className="mb-4 text-gray-700 dark:text-gray-300">
+            Total Certificates: {certificates?.total_certificates || 0}
+            (System: {certificates?.system_certificates.length || 0}, Hardware: {certificates?.hardware_certificates.length || 0})
+          </div>
+
+          {/* Hardware Certificates */}
+          {certificates && certificates.hardware_certificates.length > 0 && (
+            <div className="mb-6">
+              <h3 className="text-lg font-semibold mb-3 text-gray-900 dark:text-white">
+                Hardware Certificates
+              </h3>
+              <div className="space-y-4">
+                {certificates.hardware_certificates.map((cert, index) => {
+                  const pinStatus = getPinStatusForCertificate(cert.thumbprint);
+                  return (
+                    <div
+                      key={index}
+                      className="border border-gray-300 dark:border-gray-600 rounded-lg p-4"
+                    >
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                            Source: <span className="font-normal">{cert.source}</span>
+                          </p>
+                          <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                            Token Label: <span className="font-normal">{cert.token_label}</span>
+                          </p>
+                          <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                            Slot ID: <span className="font-normal">{cert.slot_id}</span>
+                          </p>
+                          <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
+                            Subject: {cert.subject}
+                          </p>
+                          <p className="text-sm text-gray-600 dark:text-gray-400">
+                            Issuer: {cert.issuer}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-gray-600 dark:text-gray-400">
+                            Serial: {cert.serial_number}
+                          </p>
+                          <p className="text-sm text-gray-600 dark:text-gray-400">
+                            Valid From: {moment(cert.not_valid_before).format('LL')}
+                          </p>
+                          <p className="text-sm text-gray-600 dark:text-gray-400">
+                            Valid Until: {moment(cert.not_valid_after).format('LL')}
+                          </p>
+                          <p className="text-sm text-gray-600 dark:text-gray-400">
+                            Thumbprint: {cert.thumbprint}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* PIN Status */}
+                      {pinStatus && (
+                        <div className="mt-4 pt-4 border-t border-gray-300 dark:border-gray-600">
+                          <div className="flex items-center justify-between">
+                            <div className="space-y-1">
+                              <p className="text-sm text-gray-700 dark:text-gray-300">
+                                PIN Configured:{' '}
+                                <span
+                                  className={`font-semibold ${
+                                    pinStatus.pin_configured
+                                      ? 'text-green-600 dark:text-green-400'
+                                      : 'text-red-600 dark:text-red-400'
+                                  }`}
+                                >
+                                  {pinStatus.pin_configured ? 'Yes' : 'No'}
+                                </span>
+                              </p>
+                              {pinStatus.pin_configured && (
+                                <>
+                                  <p className="text-sm text-gray-700 dark:text-gray-300">
+                                    PIN Valid:{' '}
+                                    <span
+                                      className={`font-semibold ${
+                                        pinStatus.pin_valid
+                                          ? 'text-green-600 dark:text-green-400'
+                                          : 'text-red-600 dark:text-red-400'
+                                      }`}
+                                    >
+                                      {pinStatus.pin_valid ? 'Yes' : 'No'}
+                                    </span>
+                                  </p>
+                                  {pinStatus.pin_last_verified_at && (
+                                    <p className="text-xs text-gray-600 dark:text-gray-400">
+                                      Last Verified: {moment(pinStatus.pin_last_verified_at).format('LLL')}
+                                    </p>
+                                  )}
+                                  {pinStatus.pin_last_error && (
+                                    <p className="text-xs text-red-600 dark:text-red-400">
+                                      Error: {pinStatus.pin_last_error}
+                                    </p>
+                                  )}
+                                </>
+                              )}
+                            </div>
+                            <button
+                              onClick={() => handleOpenPinModal(cert)}
+                              className="px-4 py-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg transition-colors"
+                            >
+                              {pinStatus.pin_configured ? 'Change PIN' : 'Set PIN'}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* System Certificates */}
+          {certificates && certificates.system_certificates.length > 0 && (
+            <div>
+              <h3 className="text-lg font-semibold mb-3 text-gray-900 dark:text-white">
+                System Certificates
+              </h3>
+              <div className="space-y-4">
+                {certificates.system_certificates.map((cert, index) => (
+                  <div
+                    key={index}
+                    className="border border-gray-300 dark:border-gray-600 rounded-lg p-4"
+                  >
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                          Source: <span className="font-normal">{cert.source}</span>
+                        </p>
+                        <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                          Store: <span className="font-normal">{cert.store_name} ({cert.store_location})</span>
+                        </p>
+                        <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
+                          Subject: {cert.subject}
+                        </p>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                          Issuer: {cert.issuer}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                          Serial: {cert.serial_number}
+                        </p>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                          Valid From: {moment(cert.not_valid_before).format('LL')}
+                        </p>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                          Valid Until: {moment(cert.not_valid_after).format('LL')}
+                        </p>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                          Thumbprint: {cert.thumbprint}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {(!certificates || (certificates.hardware_certificates.length === 0 && certificates.system_certificates.length === 0)) && (
+            <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+              No certificates found
+            </div>
+          )}
+        </div>
       </div>
+
+      {/* PIN Modal */}
+      {showPinModal && selectedCertificate && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full m-4">
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+                  {getPinStatusForCertificate(selectedCertificate.thumbprint)?.pin_configured ? 'Change' : 'Set'} Certificate PIN
+                </h2>
+                <button
+                  onClick={() => {
+                    setShowPinModal(false);
+                    setPinInput('');
+                    setSelectedCertificate(null);
+                  }}
+                  className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="mb-4">
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                  Token: {selectedCertificate.token_label}
+                </p>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                  Certificate: {selectedCertificate.subject.split(',')[0]}
+                </p>
+
+                <label className="block text-gray-700 dark:text-gray-300 mb-2">
+                  Enter PIN
+                </label>
+                <input
+                  type="password"
+                  value={pinInput}
+                  onChange={(e) => setPinInput(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  placeholder="Enter certificate PIN"
+                  autoFocus
+                />
+              </div>
+
+              <div className="flex gap-4">
+                <button
+                  onClick={handleSavePin}
+                  disabled={pinLoading || !pinInput}
+                  className="flex-1 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white font-semibold py-2 px-4 rounded-lg transition-colors"
+                >
+                  {pinLoading ? 'Saving...' : 'Save PIN'}
+                </button>
+                <button
+                  onClick={() => {
+                    setShowPinModal(false);
+                    setPinInput('');
+                    setSelectedCertificate(null);
+                  }}
+                  className="flex-1 bg-gray-500 hover:bg-gray-600 text-white font-semibold py-2 px-4 rounded-lg transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Config Modal */}
       {showConfigModal && configData && (
